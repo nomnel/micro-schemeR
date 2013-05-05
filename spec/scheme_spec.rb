@@ -63,12 +63,16 @@ describe 'lookup_var' do
 end
 
 describe 'special_form?' do
-  it 'determines exp is a (lambda_exp or let_exp) or not' do
+  it 'determines exp is in [lambda, let,letrec, if] or not' do
     lambda_exp = [:lambda, [:x, :y], [:+, :x, :y]]
     let_exp    = [:let, [[:x, 3], [:y, 2]], [:+, :x, :y]]
+    letrec_exp = [:letrec, [[:fn, [:lambda, [:n], :fn]]], [:fn]]
+    if_exp     = [:if, [:>, 3, 2], 1, 0]
 
     expect(special_form? lambda_exp).to eq true
     expect(special_form? let_exp   ).to eq true
+    expect(special_form? letrec_exp).to eq true
+    expect(special_form? if_exp    ).to eq true
     expect(special_form? []        ).to eq false
   end
 end
@@ -90,6 +94,26 @@ describe 'let?' do
 
     expect(let? let_exp   ).to eq true
     expect(let? lambda_exp).to eq false
+  end
+end
+
+describe 'if?' do
+  it 'determines exp is a if_exp or not' do
+    if_exp  = [:if, [:>, 3, 2], 1, 0]
+    let_exp = [:let, [[:x, 3], [:y, 2]], [:+, :x, :y]]
+
+    expect(if? if_exp ).to eq true
+    expect(if? let_exp).to eq false
+  end
+end
+
+describe 'letrec?' do
+  it 'determines exp is a letrec_exp or not' do
+    letrec_exp  = [:letrec, [[:x, 3], [:y, 2]], [:+, :x, :y]]
+    let_exp     = [:let, [[:x, 3], [:y, 2]], [:+, :x, :y]]
+
+    expect(letrec? letrec_exp).to eq true
+    expect(letrec? let_exp   ).to eq false
   end
 end
 
@@ -131,6 +155,53 @@ describe 'let_to_parameters_args_body' do
     params_args_body = [[:x, :y], [3, 2], [:+, :x, :y]]
 
     expect(let_to_parameters_args_body let_exp).to eq params_args_body
+  end
+end
+
+describe 'eval_letrec' do
+  it 'can apply binded variables recursively' do
+    exp = [:letrec,
+            [[:fact,
+              [:lambda, [:n], [:if, [:<, :n, 1], 1, [:*, :n, [:fact, [:-, :n, 1]]]]]]],
+              [:fact, 3]]
+    expect(eval_letrec exp, $global_env).to eq 6
+  end
+end
+
+describe 'set_extend_env!' do
+  it 'sets values to dummy data of env' do
+    params = [:x, :y]
+    args   = [3, 2]
+    env    = [{x: :dummy, y: :dummy}] + $global_env
+    set_extend_env! params, args, env
+    expected_env = [{x: 3, y: 2}] + $global_env
+
+    expect(env).to eq expected_env
+  end
+end
+
+describe 'letrec_to_parameters_args_body' do
+  it 'deconstructs letrec_exp to [params, args, body]' do
+    letrec_exp       = [:letrec, [[:x, 3], [:y, 2]], [:+, :x, :y]]
+    params_args_body = [[:x, :y], [3, 2], [:+, :x, :y]]
+
+    expect(letrec_to_parameters_args_body letrec_exp).to eq params_args_body
+  end
+end
+
+describe 'eval_if' do
+  it 'evaluates true_clause if cond is truth, false_clause if not' do
+    expect(eval_if [:if, [:>, 3, 2], 1, 0], $global_env).to eq 1
+    expect(eval_if [:if, [:<, 3, 2], 1, 0], $global_env).to eq 0
+  end
+end
+
+describe 'if_to_cond_true_false' do
+  it 'deconstructs if_exp to [cond, true_clause, false_clause]' do
+    if_exp   = [:if, [:>, 3, 2], 1, 0]
+    expected = [[:>, 3, 2], 1, 0]
+
+    expect(if_to_cond_true_false if_exp).to eq expected
   end
 end
 
@@ -216,5 +287,15 @@ describe 'extend_env' do
     expected = [{a: 1, b: 2}, {a: 3}]
 
     expect(extend_env params, args, env).to eq expected
+  end
+end
+
+describe 'chapter 3' do
+  it 'can evaluates letrec and if' do
+    exp = [:letrec,
+            [[:fact,
+              [:lambda, [:n], [:if, [:<, :n, 1], 1, [:*, :n, [:fact, [:-, :n, 1]]]]]]],
+              [:fact, 3]]
+    expect(_eval exp, $global_env).to eq 6
   end
 end
