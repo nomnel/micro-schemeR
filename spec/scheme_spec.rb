@@ -68,11 +68,17 @@ describe 'special_form?' do
     let_exp    = [:let, [[:x, 3], [:y, 2]], [:+, :x, :y]]
     letrec_exp = [:letrec, [[:fn, [:lambda, [:n], :fn]]], [:fn]]
     if_exp     = [:if, [:>, 3, 2], 1, 0]
+    cond_exp   = [:cond, [[:<, 1, 2], 1], [:else, 2]]
+    define_exp = [:define, :a, 1]
+    quote_exp  = [:quote, [1, 2, 3]]
 
     expect(special_form? lambda_exp).to eq true
     expect(special_form? let_exp   ).to eq true
     expect(special_form? letrec_exp).to eq true
     expect(special_form? if_exp    ).to eq true
+    expect(special_form? cond_exp  ).to eq true
+    expect(special_form? define_exp).to eq true
+    expect(special_form? quote_exp ).to eq true
     expect(special_form? []        ).to eq false
   end
 end
@@ -290,12 +296,127 @@ describe 'extend_env' do
   end
 end
 
-describe 'chapter 3' do
-  it 'can evaluates letrec and if' do
-    exp = [:letrec,
-            [[:fact,
-              [:lambda, [:n], [:if, [:<, :n, 1], 1, [:*, :n, [:fact, [:-, :n, 1]]]]]]],
-              [:fact, 3]]
-    expect(_eval exp, $global_env).to eq 6
+describe 'null?' do
+  it 'determines list is a empty list or not' do
+    expect(null? []).to eq true
+    expect(null? [:a]).to eq false
+  end
+end
+
+describe 'cons' do
+  it 'prepends element to a list (if it is not a list, then it raises an error)' do
+    expect(cons :a, [:b]).to eq [:a, :b]
+    expect{cons :a, :b}.to raise_error
+  end
+end
+
+describe 'list' do
+  it 'returns a list of args' do
+    expect(list :a, :b, :c).to eq [:a, :b, :c]
+  end
+end
+
+describe 'extend_env!' do
+  it 'extends environment destructively' do
+    env = []
+    extend_env! [:a], [1], env
+
+    expect(env).to eq [{a: 1}]
+  end
+end
+
+describe 'define_with_parameter?' do
+  it 'determines exp is like a (define (p1 p2) (body))' do
+    expect(define_with_parameter? [:define, [:p1, :p2], [:body]]).to eq true
+    expect(define_with_parameter? [:define, :var, :val]).to eq false
+  end
+end
+
+describe 'define_with_parameter_var_val' do
+  it 'deconstructs (define (var params) (body)) to [var, [:lambda, params, body]]' do
+    exp = [:define, [:var, :params], [:body]]
+    expect(define_with_parameter_var_val exp).to eq [:var, [:lambda, [:params], [:body]]]
+  end
+end
+
+describe 'define_var_val' do
+  it 'deconstructs (define var val) to [var, val]' do
+    expect(define_var_val [:define, :var, :val]).to eq [:var, :val]
+  end
+end
+
+describe 'define?' do
+  it 'determines exp is a define-exp or not' do
+    expect(define? [:define, :a, :b]).to eq true
+    expect(define? [:lambda, [:a], [:b]]).to eq false
+  end
+end
+
+describe 'eval_cond' do
+  it 'can evaluates cond-exp' do
+    cond_exp = [:cond,
+                 [[:>, 1, 1], 1],
+                 [[:>, 2, 1], 2],
+                 [[:>, 3, 1], 3],
+                 [:else, -1]]
+    expect(eval_cond cond_exp, $global_env).to eq 2
+  end
+end
+
+describe 'cond_to_if' do
+  it 'evaluates cond-exp to if-exp' do
+    cond_exp = [[[:>, 1, 1], 1],
+               [[:>, 2, 1], 2],
+               [[:>, 3, 1], 3],
+               [:else, -1]]
+    if_exp = [:if, [:>, 1, 1], 1,
+               [:if, [:>, 2, 1], 2,
+                 [:if, [:>, 3, 1], 3,
+                   [:if, :true, -1, '']]]]
+    expect(cond_to_if cond_exp).to eq if_exp
+  end
+end
+
+describe 'cond?' do
+  it 'determines exp is a cond-exp or not' do
+    cond_exp = [:cond,
+                 [[:>, 1, 1], 1],
+                 [[:>, 2, 1], 2],
+                 [[:>, 3, 1], 3],
+                 [:else, -1]]
+    if_exp = [:if, :true, 1, 2]
+
+    expect(cond? cond_exp).to eq true
+    expect(cond? if_exp).to eq false
+  end
+end
+
+describe 'parse' do
+  it 'parse scheme-exp to internal exp' do
+    scheme_exp = '(letrec ((fact (lambda (n) (if (< n 1) 1 (* n (fact (- n 1))))))) (fact 3))'
+    internal_exp = [:letrec, [[:fact, [:lambda, [:n], [:if, [:<, :n, 1], 1, [:*, :n, [:fact, [:-, :n, 1]]]]]]], [:fact, 3]]
+
+    expect(parse scheme_exp).to eq internal_exp
+  end
+end
+
+describe 'eval_quote' do
+  it 'returns args as it is' do
+    exp = [:quote, [1, 2, 3]]
+    expect(eval_quote exp, $global_env).to eq [1, 2, 3]
+  end
+end
+
+describe 'quote?' do
+  it 'determines exp is a quote-exp or not' do
+    expect(quote? [:quote, [1, 2, 3]]).to eq true
+    expect(quote? [:+, 1, 2]).to eq false
+  end
+end
+
+describe 'closure?' do
+  it 'determines exp is a closure-exp or not' do
+    expect(closure? [:closure, [:a, :b], [:+, :a, :b], $global_env]).to eq true
+    expect(closure? [:+, 1, 2]).to eq false
   end
 end
